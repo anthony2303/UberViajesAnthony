@@ -19,21 +19,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Restaurar google-services.json
-        # El repo NO incluye este archivo (está en .gitignore) porque contiene
-        # credenciales de tu proyecto Firebase. Para que este build funcione,
-        # agrega un secret llamado GOOGLE_SERVICES_JSON en:
-        # Settings -> Secrets and variables -> Actions -> New repository secret
-        # con el CONTENIDO COMPLETO de tu google-services.json en base64:
-        #   base64 -i google-services.json | pbcopy   (macOS)
-        #   base64 -w0 google-services.json            (Linux)
-        run: |
-          if [ -z "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            echo "::error::Falta el secret GOOGLE_SERVICES_JSON. Agrégalo en Settings > Secrets and variables > Actions."
-            exit 1
-          fi
-          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 

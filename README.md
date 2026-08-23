@@ -12,59 +12,39 @@ conjunto de funciones.
   `MediaProjection`.
 - `ScreenCaptureService`: servicio en primer plano que captura la pantalla
   (fallback para dispositivos donde el AccessibilityService falla) e integra
-  ML Kit Text Recognition para OCR. La conversión `Image → Bitmap` y el
-  parseo de la oferta de viaje quedan como `TODO` — son tu lógica de negocio.
-- Dependencias ya declaradas para Firebase (Messaging/Crashlytics/Remote
-  Config — comentadas hasta que agregues tu `google-services.json`),
-  Google Play Billing y AdMob.
+  ML Kit Text Recognition para OCR.
+- Dependencias ya declaradas para Google Play Billing y AdMob.
 
 ## Estado actual
 
 - ✅ `ScreenCaptureService`: conversión `Image → Bitmap` implementada, llamada
   a ML Kit funcional, parseo básico de tarifa/distancia con regex, y
   evaluación simple de rentabilidad (`evaluateOffer`).
-- ✅ Firebase: `UberViajesApplication` inicializa Crashlytics y Remote Config
-  (con `min_fare_mx` / `min_rate_per_km` como valores remotos), y
-  `UberViajesFirebaseMessagingService` recibe notificaciones push.
-- ⚠️ **IMPORTANTE**: el proyecto NO compilará todavía porque falta
-  `app/google-services.json` — el plugin de Firebase lo requiere en tiempo
-  de build. Descárgalo desde Firebase Console (Configuración del proyecto →
-  Tus apps → Android) y colócalo en `app/google-services.json` (ya está en
-  `.gitignore`, no se sube al repo).
+- ✅ Workflow de GitHub Actions que compila un APK debug en cada push a
+  `main` y lo deja descargable como artifact.
+- ⛔ Firebase (Messaging/Crashlytics/Remote Config) removido — si más
+  adelante lo quieres agregar, hay que volver a declarar el plugin
+  `com.google.gms.google-services` en los `build.gradle.kts`, las
+  dependencias correspondientes, y colocar tu `google-services.json`.
 
 ## Qué falta / próximos pasos sugeridos
 
-1. Agregar tu `google-services.json` (ver arriba) antes de compilar.
-2. Portar el `AccessibilityService` principal desde tu proyecto Viajes
+1. Portar el `AccessibilityService` principal desde tu proyecto Viajes
    Rentables (no incluido aquí porque es lógica propia tuya que no estaba en
    este manifest).
-3. Ajustar las expresiones regulares de `parseTripOffer()` al formato real
+2. Ajustar las expresiones regulares de `parseTripOffer()` al formato real
    de texto que muestra la app de la plataforma en tu pantalla.
-4. Conectar `evaluateOffer()` a un overlay visual (WindowManager) o a un
+3. Conectar `evaluateOffer()` a un overlay visual (WindowManager) o a un
    callback/broadcast hacia `MainActivity`.
-5. Leer `min_fare_mx`/`min_rate_per_km` desde Remote Config en vez de los
-   valores fijos actuales en `ScreenCaptureService`.
-6. Configurar Play Billing con tus SKUs de licencia/suscripción.
-7. Íconos, splash screen y branding.
+4. Configurar Play Billing con tus SKUs de licencia/suscripción.
+5. Íconos, splash screen y branding.
+6. (Opcional) Volver a agregar Firebase si más adelante lo necesitas.
 
 ## Descargar el APK compilado desde GitHub Actions
 
 Cada push a `main` dispara el workflow `.github/workflows/build-apk.yml`, que
 compila un APK debug y lo sube como artifact descargable (pestaña **Actions**
 del repo → selecciona el run → sección **Artifacts**, abajo del todo).
-
-**Antes de que el build funcione**, agrega un secret del repo con tu
-`google-services.json` (el workflow lo necesita porque el archivo no se sube
-al repo, solo vive local/en el secret):
-
-1. Codifica tu archivo en base64:
-   ```bash
-   base64 -w0 google-services.json      # Linux
-   base64 -i google-services.json       # macOS
-   ```
-2. En GitHub: Settings → Secrets and variables → Actions → New repository
-   secret → nombre `GOOGLE_SERVICES_JSON`, valor = el string base64 completo.
-3. Vuelve a correr el workflow (push nuevo o "Re-run jobs").
 
 ## Subir a GitHub
 
