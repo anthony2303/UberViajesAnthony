@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Descomenta cuando agregues tu google-services.json de Firebase
-    // id("com.google.gms.google-services")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -48,11 +48,13 @@ dependencies {
     // OCR de la pantalla capturada (lectura de ofertas de viaje)
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // Firebase (agrega google-services.json antes de usar)
-    // implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-    // implementation("com.google.firebase:firebase-messaging-ktx")
-    // implementation("com.google.firebase:firebase-crashlytics-ktx")
-    // implementation("com.google.firebase:firebase-config-ktx")
+    // Firebase — requiere que coloques tu propio google-services.json en
+    // app/google-services.json antes de compilar (ver README).
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+    implementation("com.google.firebase:firebase-config-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
 
     // Google Play Billing (licencia / suscripción)
     implementation("com.android.billingclient:billing-ktx:7.1.1")

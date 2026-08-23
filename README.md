@@ -18,19 +18,34 @@ conjunto de funciones.
   Config — comentadas hasta que agregues tu `google-services.json`),
   Google Play Billing y AdMob.
 
+## Estado actual
+
+- ✅ `ScreenCaptureService`: conversión `Image → Bitmap` implementada, llamada
+  a ML Kit funcional, parseo básico de tarifa/distancia con regex, y
+  evaluación simple de rentabilidad (`evaluateOffer`).
+- ✅ Firebase: `UberViajesApplication` inicializa Crashlytics y Remote Config
+  (con `min_fare_mx` / `min_rate_per_km` como valores remotos), y
+  `UberViajesFirebaseMessagingService` recibe notificaciones push.
+- ⚠️ **IMPORTANTE**: el proyecto NO compilará todavía porque falta
+  `app/google-services.json` — el plugin de Firebase lo requiere en tiempo
+  de build. Descárgalo desde Firebase Console (Configuración del proyecto →
+  Tus apps → Android) y colócalo en `app/google-services.json` (ya está en
+  `.gitignore`, no se sube al repo).
+
 ## Qué falta / próximos pasos sugeridos
 
-1. Portar el `AccessibilityService` principal desde tu proyecto Viajes
+1. Agregar tu `google-services.json` (ver arriba) antes de compilar.
+2. Portar el `AccessibilityService` principal desde tu proyecto Viajes
    Rentables (no incluido aquí porque es lógica propia tuya que no estaba en
    este manifest).
-2. Completar `processImage()` en `ScreenCaptureService.kt` (conversión de
-   `Image` a `Bitmap` y llamado a ML Kit).
-3. Implementar `handleRecognizedText()` con tus reglas de rentabilidad
-   (tarifa mínima, distancia, zona, etc.).
-4. Agregar `google-services.json` de tu proyecto Firebase y descomentar el
-   plugin/dependencias correspondientes.
-5. Configurar Play Billing con tus SKUs de licencia/suscripción.
-6. Íconos, splash screen y branding.
+3. Ajustar las expresiones regulares de `parseTripOffer()` al formato real
+   de texto que muestra la app de la plataforma en tu pantalla.
+4. Conectar `evaluateOffer()` a un overlay visual (WindowManager) o a un
+   callback/broadcast hacia `MainActivity`.
+5. Leer `min_fare_mx`/`min_rate_per_km` desde Remote Config en vez de los
+   valores fijos actuales en `ScreenCaptureService`.
+6. Configurar Play Billing con tus SKUs de licencia/suscripción.
+7. Íconos, splash screen y branding.
 
 ## Subir a GitHub
 
