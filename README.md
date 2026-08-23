@@ -47,12 +47,30 @@ conjunto de funciones.
 6. Configurar Play Billing con tus SKUs de licencia/suscripción.
 7. Íconos, splash screen y branding.
 
+## Descargar el APK compilado desde GitHub Actions
+
+Cada push a `main` dispara el workflow `.github/workflows/build-apk.yml`, que
+compila un APK debug y lo sube como artifact descargable (pestaña **Actions**
+del repo → selecciona el run → sección **Artifacts**, abajo del todo).
+
+**Antes de que el build funcione**, agrega un secret del repo con tu
+`google-services.json` (el workflow lo necesita porque el archivo no se sube
+al repo, solo vive local/en el secret):
+
+1. Codifica tu archivo en base64:
+   ```bash
+   base64 -w0 google-services.json      # Linux
+   base64 -i google-services.json       # macOS
+   ```
+2. En GitHub: Settings → Secrets and variables → Actions → New repository
+   secret → nombre `GOOGLE_SERVICES_JSON`, valor = el string base64 completo.
+3. Vuelve a correr el workflow (push nuevo o "Re-run jobs").
+
 ## Subir a GitHub
 
 ```bash
 git remote add origin https://github.com/anthony2303/UberViajesAnthony.git
 git add .
-git commit -m "Skeleton inicial: MediaProjection + ML Kit OCR, Firebase/Billing/Ads stubs"
-git branch -M main
-git push -u origin main
+git commit -m "Agrega workflow de build de APK"
+git push
 ```
