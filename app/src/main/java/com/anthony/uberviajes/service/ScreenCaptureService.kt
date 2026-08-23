@@ -71,13 +71,25 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification())
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        } catch (e: Exception) {
+            showDebugToast("ERROR en startForeground: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
         val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
 
         if (resultCode != -1 && resultData != null) {
-            startProjection(resultCode, resultData)
+            try {
+                startProjection(resultCode, resultData)
+            } catch (e: Exception) {
+                showDebugToast("ERROR en startProjection: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        } else {
+            showDebugToast("ERROR: el servicio arrancó sin datos de proyección válidos")
         }
 
         return START_NOT_STICKY
@@ -221,16 +233,20 @@ class ScreenCaptureService : Service() {
     }
 
     /**
-     * Toast simple para depurar sin ADB. Throttleado a ~1 cada 2.5s para no
-     * saturar la pantalla si hay muchos frames seguidos. Corre en el hilo
-     * principal porque el ImageReader ahora usa mainHandler.
+     * Toast simple para depurar sin ADB. Throttleado a ~1 cada 2.5s (solo los
+     * mensajes normales, no los de ERROR) para no saturar la pantalla si hay
+     * muchos frames seguidos. Corre en el hilo principal porque el
+     * ImageReader ahora usa mainHandler.
      */
     private fun showDebugToast(message: String) {
+        val isError = message.startsWith("ERROR")
         val now = System.currentTimeMillis()
-        if (now - lastDebugToastAt < 2500) return
-        lastDebugToastAt = now
+        if (!isError) {
+            if (now - lastDebugToastAt < 2500) return
+            lastDebugToastAt = now
+        }
         mainHandler.post {
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, message, if (isError) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
         }
     }
 
