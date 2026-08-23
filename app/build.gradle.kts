@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.anthony.uberviajes"
-    compileSdk = 36
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.anthony.uberviajes"
         minSdk = 29
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
     }
