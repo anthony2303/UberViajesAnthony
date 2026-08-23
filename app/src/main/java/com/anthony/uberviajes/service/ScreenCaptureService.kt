@@ -14,7 +14,10 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
@@ -50,6 +53,10 @@ class ScreenCaptureService : Service() {
     private var lastProcessedText: String = ""
     private var isProcessing = false
 
+    // Throttle para no saturar de Toasts (modo debug, temporal).
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var lastDebugToastAt = 0L
+
     // TODO: ajusta estos umbrales a tus criterios reales de "viaje rentable"
     private var minFareMx = 60.0
     private var minRatePerKm = 12.0
@@ -77,6 +84,8 @@ class ScreenCaptureService : Service() {
     }
 
     private fun startProjection(resultCode: Int, data: Intent) {
+        showDebugToast("Iniciando proyección de pantalla…")
+
         val projectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = projectionManager.getMediaProjection(resultCode, data)
@@ -95,10 +104,14 @@ class ScreenCaptureService : Service() {
             imageReader?.surface, null, null
         )
 
+        if (virtualDisplay == null) {
+            showDebugToast("ERROR: no se pudo crear el VirtualDisplay")
+        }
+
         imageReader?.setOnImageAvailableListener({ reader ->
             val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
             processImage(image)
-        }, null)
+        }, mainHandler)
     }
 
     private fun processImage(image: Image) {
@@ -115,9 +128,12 @@ class ScreenCaptureService : Service() {
 
             textRecognizer.process(inputImage)
                 .addOnSuccessListener { visionText -> handleRecognizedText(visionText) }
-                .addOnFailureListener { /* TODO: log/telemetría de errores de OCR */ }
+                .addOnFailureListener { e ->
+                    showDebugToast("ERROR de ML Kit OCR: ${e.message}")
+                }
                 .addOnCompleteListener { isProcessing = false }
         } catch (e: Exception) {
+            showDebugToast("ERROR procesando frame: ${e.message}")
             isProcessing = false
         } finally {
             image.close()
@@ -154,7 +170,17 @@ class ScreenCaptureService : Service() {
         if (text.isBlank() || text == lastProcessedText) return
         lastProcessedText = text
 
-        val offer = parseTripOffer(text) ?: return
+        // DEBUG: muestra un fragmento de lo que el OCR está leyendo, para
+        // confirmar que la captura de pantalla sí funciona aunque todavía
+        // no matchee ninguna tarifa. Quítalo cuando ya esté calibrado.
+        val preview = text.take(120).replace("\n", " | ")
+        showDebugToast("OCR leyó: \"$preview\"")
+
+        val offer = parseTripOffer(text)
+        if (offer == null) {
+            showDebugToast("No se encontró tarifa (\$XX.XX) en el texto")
+            return
+        }
         evaluateOffer(offer)
     }
 
@@ -183,9 +209,29 @@ class ScreenCaptureService : Service() {
         val isRentable = offer.fareMx >= minFareMx &&
             (ratePerKm == null || ratePerKm >= minRatePerKm)
 
-        // TODO: mostrar el resultado en un overlay (WindowManager) o enviar un
-        // broadcast/callback a MainActivity, según cómo lo tenías en
-        // Viajes Rentables.
+        val ratePerKmText = ratePerKm?.let { "%.1f".format(it) } ?: "N/A"
+        val veredicto = if (isRentable) "✅ RENTABLE" else "❌ NO rentable"
+        showDebugToast(
+            "$veredicto — Tarifa: \$${offer.fareMx} | Km: ${offer.distanceKm ?: "N/A"} | \$/km: $ratePerKmText"
+        )
+
+        // TODO: además del Toast de debug, mostrar el resultado en un overlay
+        // visual (WindowManager) más permanente/legible, según cómo lo tenías
+        // en Viajes Rentables.
+    }
+
+    /**
+     * Toast simple para depurar sin ADB. Throttleado a ~1 cada 2.5s para no
+     * saturar la pantalla si hay muchos frames seguidos. Corre en el hilo
+     * principal porque el ImageReader ahora usa mainHandler.
+     */
+    private fun showDebugToast(message: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastDebugToastAt < 2500) return
+        lastDebugToastAt = now
+        mainHandler.post {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private data class TripOffer(

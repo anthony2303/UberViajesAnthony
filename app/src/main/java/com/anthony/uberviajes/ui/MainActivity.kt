@@ -25,11 +25,14 @@ class MainActivity : AppCompatActivity() {
     private val captureRequestLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK && result.data != null) {
+                Toast.makeText(this, "Permiso concedido, iniciando servicio…", Toast.LENGTH_SHORT).show()
                 val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
                     putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
                     putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, result.data)
                 }
                 startForegroundService(serviceIntent)
+            } else {
+                Toast.makeText(this, "Permiso de captura NO concedido (resultCode=${result.resultCode})", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -55,6 +58,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCaptureFlow() {
+        Toast.makeText(this, "Pidiendo permiso de captura de pantalla…", Toast.LENGTH_SHORT).show()
         // TODO: pedir permiso de overlay (SYSTEM_ALERT_WINDOW) si aún no se otorgó
         captureRequestLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
     }
