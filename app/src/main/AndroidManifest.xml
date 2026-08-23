@@ -18,6 +18,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.UberViajesAnthony">
 
+        <!-- OBLIGATORIO por el SDK de Google Mobile Ads: sin este meta-data,
+             el proceso crashea al arrancar (antes de Application.onCreate).
+             Este es el ID DE PRUEBA oficial de Google — reemplázalo por tu
+             App ID real de AdMob (Consola AdMob -> Apps -> tu app -> App ID)
+             antes de publicar o de que quieras ver anuncios reales. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true">

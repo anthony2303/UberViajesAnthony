@@ -39,6 +39,9 @@ conjunto de funciones.
 4. Configurar Play Billing con tus SKUs de licencia/suscripción.
 5. Íconos, splash screen y branding.
 6. (Opcional) Volver a agregar Firebase si más adelante lo necesitas.
+7. **Reemplazar el App ID de AdMob** en `AndroidManifest.xml` (actualmente
+   tiene el ID de prueba oficial de Google) por tu App ID real cuando quieras
+   ver anuncios de verdad — Consola AdMob → Apps → tu app → App ID.
 
 ## Descargar el APK compilado desde GitHub Actions
 
