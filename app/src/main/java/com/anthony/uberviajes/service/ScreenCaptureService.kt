@@ -23,6 +23,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -75,7 +76,14 @@ class ScreenCaptureService : Service() {
 
     // --- Overlay flotante ---
     private var windowManager: WindowManager? = null
-    private var overlayView: TextView? = null
+    private var overlayContainer: LinearLayout? = null
+    private var overlayText: TextView? = null
+
+    // Firma de la oferta actualmente mostrada/descartada, para saber si el
+    // usuario ya la cerró con la ✕ y no reaparezca sola mientras siga siendo
+    // la misma oferta en pantalla.
+    private var dismissedSignature: String? = null
+    private var currentSignature: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -218,7 +226,9 @@ class ScreenCaptureService : Service() {
         val offer = parseTripOffer(text)
         if (offer == null) {
             showDebugToast("Sin oferta completa (tarifa+km+min) en pantalla")
-            updateOverlay("Esperando oferta…")
+            currentSignature = null
+            dismissedSignature = null // ya no está en pantalla, se olvida el descarte
+            hideOverlay()
             return
         }
         evaluateOffer(offer)
@@ -255,6 +265,15 @@ class ScreenCaptureService : Service() {
     }
 
     private fun evaluateOffer(offer: TripOffer) {
+        val signature = "${offer.fareMx}-${offer.distanceKm}-${offer.minutes}"
+        currentSignature = signature
+
+        if (signature == dismissedSignature) {
+            // El usuario ya cerró esta misma oferta con la ✕; sigue en
+            // pantalla pero no la volvemos a mostrar hasta que cambie.
+            return
+        }
+
         val ratePerKm = if (offer.distanceKm != null && offer.distanceKm > 0) {
             offer.fareMx / offer.distanceKm
         } else null
@@ -276,7 +295,7 @@ class ScreenCaptureService : Service() {
     // --- Overlay flotante ---
 
     private fun addOverlayIfPossible() {
-        if (overlayView != null) return // ya está agregado
+        if (overlayContainer != null) return // ya está agregado
         if (!Settings.canDrawOverlays(this)) {
             showDebugToast("Sin permiso de overlay, no se puede mostrar encima de otras apps")
             return
@@ -300,27 +319,53 @@ class ScreenCaptureService : Service() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                // Centrado en pantalla, como se pidió — más fácil de leer
-                // que pegado a una esquina donde tapa otros controles.
+                // Centrado en pantalla — más fácil de leer que pegado a una
+                // esquina donde tapa otros controles.
                 gravity = Gravity.CENTER
             }
 
-            val view = TextView(this).apply {
+            val density = resources.displayMetrics.density
+
+            val textView = TextView(this).apply {
                 text = "UBER VIAJES ANTHONY\nEsperando oferta…"
                 setTextColor(Color.WHITE)
                 typeface = Typeface.MONOSPACE
                 setLetterSpacing(0.05f)
                 textSize = 13f
                 gravity = Gravity.CENTER
-                val padH = (18 * resources.displayMetrics.density).toInt()
-                val padV = (14 * resources.displayMetrics.density).toInt()
+            }
+
+            val closeButton = TextView(this).apply {
+                text = "✕"
+                setTextColor(Color.WHITE)
+                textSize = 15f
+                val pad = (6 * density).toInt()
+                setPadding(pad, 0, pad, pad)
+                setOnClickListener {
+                    dismissedSignature = currentSignature
+                    hideOverlay()
+                }
+            }
+
+            val container = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                val padH = (18 * density).toInt()
+                val padV = (14 * density).toInt()
                 setPadding(padH, padV, padH, padV)
                 background = buildOverlayBackground(Color.parseColor("#18FFFF"))
                 elevation = 12f
+                visibility = android.view.View.GONE // oculto hasta que haya una oferta real
+
+                addView(closeButton, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { gravity = Gravity.END })
+                addView(textView)
             }
 
-            windowManager?.addView(view, params)
-            overlayView = view
+            windowManager?.addView(container, params)
+            overlayContainer = container
+            overlayText = textView
         } catch (e: Exception) {
             showDebugToast("ERROR agregando overlay: ${e.message}")
         }
@@ -342,20 +387,28 @@ class ScreenCaptureService : Service() {
 
     private fun updateOverlay(text: String, accentColor: Int = Color.parseColor("#18FFFF")) {
         mainHandler.post {
-            overlayView?.apply {
-                this.text = "UBER VIAJES ANTHONY\n$text"
+            overlayText?.text = "UBER VIAJES ANTHONY\n$text"
+            overlayContainer?.apply {
                 background = buildOverlayBackground(accentColor)
+                visibility = android.view.View.VISIBLE
             }
+        }
+    }
+
+    private fun hideOverlay() {
+        mainHandler.post {
+            overlayContainer?.visibility = android.view.View.GONE
         }
     }
 
     private fun removeOverlay() {
         try {
-            overlayView?.let { windowManager?.removeView(it) }
+            overlayContainer?.let { windowManager?.removeView(it) }
         } catch (_: Exception) {
             // la vista ya pudo haber sido removida por el sistema
         }
-        overlayView = null
+        overlayContainer = null
+        overlayText = null
     }
 
     /**
