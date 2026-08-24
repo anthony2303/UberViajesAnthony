@@ -217,7 +217,7 @@ class ScreenCaptureService : Service() {
 
         val offer = parseTripOffer(text)
         if (offer == null) {
-            showDebugToast("No se encontró tarifa (\$XX.XX) en el texto")
+            showDebugToast("Sin oferta completa (tarifa+km+min) en pantalla")
             updateOverlay("Esperando oferta…")
             return
         }
@@ -229,6 +229,11 @@ class ScreenCaptureService : Service() {
      * reconocido. Calibrado con una oferta real de Uber:
      *
      *   "$32.96 ... Total: 23 min (9.7 km) ..."
+     *
+     * A propósito exige que aparezcan LOS TRES juntos (tarifa + km + min) —
+     * así una pantalla que solo tiene un "$" suelto (p. ej. ganancias del
+     * día, resumen semanal) no se confunde con una oferta de viaje real, que
+     * era lo que dejaba el overlay "pegado" mostrando una oferta vieja.
      *
      * Si tu formato varía entre Uber/DiDi/Cabify, puede que necesites
      * ajustar estos patrones — mándame otra captura de pantalla del texto
@@ -243,7 +248,9 @@ class ScreenCaptureService : Service() {
         val km = if (kmMatch.find()) kmMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
         val min = if (minMatch.find()) minMatch.group(1)?.toIntOrNull() else null
 
-        if (fare == null) return null
+        // Los tres deben estar presentes — si falta km o min, no lo tratamos
+        // como oferta real (evita falsos positivos de un "$" suelto).
+        if (fare == null || km == null || min == null) return null
         return TripOffer(fareMx = fare, distanceKm = km, minutes = min)
     }
 
