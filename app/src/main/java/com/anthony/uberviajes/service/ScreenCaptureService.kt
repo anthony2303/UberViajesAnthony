@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -17,6 +18,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.google.mlkit.vision.common.InputImage
@@ -26,13 +31,14 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.regex.Pattern
 
 /**
- * Servicio de respaldo (fallback) para leer las ofertas de viaje mediante captura
- * de pantalla + OCR, usado en dispositivos (p. ej. Samsung/OPPO) donde el
- * AccessibilityService no recibe los eventos de forma confiable.
+ * Servicio de respaldo (fallback) para leer las ofertas de viaje mediante
+ * captura de pantalla + OCR, usado en dispositivos (p. ej. Samsung/OPPO)
+ * donde el AccessibilityService no recibe los eventos de forma confiable.
  *
- * Este es un skeleton funcional: implementa el flujo de MediaProjection + ImageReader
- * + ML Kit, pero la lógica de parseo/evaluación de la oferta (tarifa, distancia,
- * tiempo) queda como TODO para que la completes con tus reglas de negocio.
+ * Muestra el resultado en dos lugares:
+ *  - Toasts de debug (temporales, se van a ir quitando conforme se calibre).
+ *  - Un overlay flotante fijo (WindowManager) encima de Uber/DiDi, que es lo
+ *    que se queda visible mientras se comparte pantalla.
  */
 class ScreenCaptureService : Service() {
 
@@ -65,6 +71,10 @@ class ScreenCaptureService : Service() {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
+    // --- Overlay flotante ---
+    private var windowManager: WindowManager? = null
+    private var overlayView: TextView? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -79,10 +89,15 @@ class ScreenCaptureService : Service() {
             return START_NOT_STICKY
         }
 
-        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
+        addOverlayIfPossible()
+
+        // Ojo: Activity.RESULT_OK vale -1, así que NO se puede usar -1 como
+        // valor "no hay dato" (bug que ya nos mordió una vez). Int.MIN_VALUE
+        // no colisiona con ningún resultCode real.
+        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Int.MIN_VALUE) ?: Int.MIN_VALUE
         val resultData = intent?.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
 
-        if (resultCode != -1 && resultData != null) {
+        if (resultCode != Int.MIN_VALUE && resultData != null) {
             try {
                 startProjection(resultCode, resultData)
             } catch (e: Exception) {
@@ -110,7 +125,7 @@ class ScreenCaptureService : Service() {
         imageReader = ImageReader.newInstance(captureWidth, captureHeight, PixelFormat.RGBA_8888, 2)
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "GananciasProCapture",
+            "UberViajesAnthonyCapture",
             captureWidth, captureHeight, density,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader?.surface, null, null
@@ -191,26 +206,33 @@ class ScreenCaptureService : Service() {
         val offer = parseTripOffer(text)
         if (offer == null) {
             showDebugToast("No se encontró tarifa (\$XX.XX) en el texto")
+            updateOverlay("Esperando oferta…")
             return
         }
         evaluateOffer(offer)
     }
 
     /**
-     * Extrae tarifa (MXN) y distancia (km) del texto reconocido.
-     * TODO: ajusta las expresiones regulares al formato real que muestra la
-     * app de la plataforma (Uber/DiDi/etc.) en tu dispositivo — los patrones
-     * de abajo son un punto de partida genérico.
+     * Extrae tarifa (MXN), distancia (km) y tiempo (min) del texto
+     * reconocido. Calibrado con una oferta real de Uber:
+     *
+     *   "$32.96 ... Total: 23 min (9.7 km) ..."
+     *
+     * Si tu formato varía entre Uber/DiDi/Cabify, puede que necesites
+     * ajustar estos patrones — mándame otra captura de pantalla del texto
+     * que no matchee y lo afinamos.
      */
     private fun parseTripOffer(text: String): TripOffer? {
-        val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:\\.\\d{1,2})?)").matcher(text)
+        val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:[.,]\\d{1,2})?)").matcher(text)
         val kmMatch = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s?km").matcher(text)
+        val minMatch = Pattern.compile("(\\d+)\\s?min").matcher(text)
 
-        val fare = if (fareMatch.find()) fareMatch.group(1)?.toDoubleOrNull() else null
+        val fare = if (fareMatch.find()) fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
         val km = if (kmMatch.find()) kmMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
+        val min = if (minMatch.find()) minMatch.group(1)?.toIntOrNull() else null
 
         if (fare == null) return null
-        return TripOffer(fareMx = fare, distanceKm = km)
+        return TripOffer(fareMx = fare, distanceKm = km, minutes = min)
     }
 
     private fun evaluateOffer(offer: TripOffer) {
@@ -223,13 +245,73 @@ class ScreenCaptureService : Service() {
 
         val ratePerKmText = ratePerKm?.let { "%.1f".format(it) } ?: "N/A"
         val veredicto = if (isRentable) "✅ RENTABLE" else "❌ NO rentable"
-        showDebugToast(
-            "$veredicto — Tarifa: \$${offer.fareMx} | Km: ${offer.distanceKm ?: "N/A"} | \$/km: $ratePerKmText"
-        )
+        val resumen = "$veredicto\n\$${offer.fareMx} · ${offer.distanceKm ?: "?"} km · ${offer.minutes ?: "?"} min\n\$/km: $ratePerKmText"
 
-        // TODO: además del Toast de debug, mostrar el resultado en un overlay
-        // visual (WindowManager) más permanente/legible, según cómo lo tenías
-        // en Viajes Rentables.
+        showDebugToast(resumen.replace("\n", " | "))
+        updateOverlay(resumen)
+    }
+
+    // --- Overlay flotante ---
+
+    private fun addOverlayIfPossible() {
+        if (overlayView != null) return // ya está agregado
+        if (!Settings.canDrawOverlays(this)) {
+            showDebugToast("Sin permiso de overlay, no se puede mostrar encima de otras apps")
+            return
+        }
+
+        try {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+            val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                overlayType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 24
+                y = 120
+            }
+
+            val view = TextView(this).apply {
+                text = "Uber Viajes Anthony\nEsperando oferta…"
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.argb(230, 20, 20, 20))
+                textSize = 12f
+                val pad = (10 * resources.displayMetrics.density).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+
+            windowManager?.addView(view, params)
+            overlayView = view
+        } catch (e: Exception) {
+            showDebugToast("ERROR agregando overlay: ${e.message}")
+        }
+    }
+
+    private fun updateOverlay(text: String) {
+        mainHandler.post {
+            overlayView?.text = "Uber Viajes Anthony\n$text"
+        }
+    }
+
+    private fun removeOverlay() {
+        try {
+            overlayView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {
+            // la vista ya pudo haber sido removida por el sistema
+        }
+        overlayView = null
     }
 
     /**
@@ -252,7 +334,8 @@ class ScreenCaptureService : Service() {
 
     private data class TripOffer(
         val fareMx: Double,
-        val distanceKm: Double?
+        val distanceKm: Double?,
+        val minutes: Int?
     )
 
     private fun createNotificationChannel() {
@@ -269,7 +352,7 @@ class ScreenCaptureService : Service() {
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("GananciasPro")
+            .setContentTitle("Uber Viajes Anthony")
             .setContentText("Analizando ofertas de viaje…")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .build()
@@ -277,6 +360,7 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        removeOverlay()
         virtualDisplay?.release()
         imageReader?.close()
         mediaProjection?.stop()
