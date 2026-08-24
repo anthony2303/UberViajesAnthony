@@ -414,20 +414,31 @@ class ScreenCaptureService : Service() {
                 setTextColor(accentColor)
             }
             overlayStats?.text = statsText
-            overlayContainer?.apply {
-                background = buildOverlayBackground(accentColor)
-                visibility = android.view.View.VISIBLE
-            }
-            // Fuerza a WindowManager a volver a medir la ventana con el
-            // contenido actual — sin esto, una ventana WRAP_CONTENT se queda
-            // con el tamaño que tenía la PRIMERA vez que se agregó (en este
-            // caso, oculta/casi vacía), y el texto nuevo se ve comprimido
-            // partiéndose letra por letra.
+            overlayContainer?.background = buildOverlayBackground(accentColor)
+
+            // OJO: requestLayout() + updateViewLayout() NO fuerza de forma
+            // confiable un remedido real en una ventana WRAP_CONTENT de tipo
+            // overlay en varios fabricantes (Samsung/OPPO/MIUI). El síntoma
+            // exacto es este: la ventana se queda con el tamaño que tenía la
+            // PRIMERA vez que se agregó (oculta, con texto "…"), así que al
+            // cambiar a "DIAMANTE" el texto se ve comprimido/cortado ("DI") y
+            // las stats truncadas ("$88" en vez de "$31.9/km · $347/h").
+            //
+            // La única forma confiable de forzar un remedido real es quitar
+            // la ventana y volver a agregarla ya con el contenido final
+            // puesto, para que el primer (y único) medido sea el correcto.
+            val container = overlayContainer ?: return@post
+            val params = overlayParams ?: return@post
             try {
-                overlayContainer?.requestLayout()
-                windowManager?.updateViewLayout(overlayContainer, overlayParams)
+                windowManager?.removeViewImmediate(container)
             } catch (_: Exception) {
-                // la vista pudo no estar adjunta todavía; se ignora
+                // pudo no estar adjunta todavía; se ignora
+            }
+            container.visibility = android.view.View.VISIBLE
+            try {
+                windowManager?.addView(container, params)
+            } catch (e: Exception) {
+                showDebugToast("ERROR reagregando overlay: ${e.message}")
             }
         }
     }
