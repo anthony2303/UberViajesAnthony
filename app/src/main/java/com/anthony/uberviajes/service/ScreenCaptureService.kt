@@ -101,7 +101,13 @@ class ScreenCaptureService : Service() {
             return START_NOT_STICKY
         }
 
-        addOverlayIfPossible()
+        // OJO: ya NO se crea el overlay aquí. Crearlo de una vez, oculto y
+        // con texto de relleno ("…"), era la causa real del bug de tamaño:
+        // esa primera medición "vacía" dejaba la ventana WRAP_CONTENT
+        // atascada en un tamaño chico para siempre, sin importar qué texto
+        // se le pusiera después. Ahora la ventana se crea perezosamente,
+        // ya con el contenido real, la primera vez que hay una oferta real
+        // (ver ensureOverlayCreated(), llamada desde updateOverlay()).
 
         // Ojo: Activity.RESULT_OK vale -1, así que NO se puede usar -1 como
         // valor "no hay dato" (bug que ya nos mordió una vez). Int.MIN_VALUE
@@ -301,8 +307,23 @@ class ScreenCaptureService : Service() {
 
     // --- Overlay flotante ---
 
-    private fun addOverlayIfPossible() {
-        if (overlayContainer != null) return // ya está agregado
+    /**
+     * Crea la ventana del overlay YA con el contenido real puesto
+     * (tierLabel/statsText/accentColor recibidos), en vez de crearla
+     * vacía/oculta ("…") y cambiarla después.
+     *
+     * Esta es la diferencia real frente a la versión que sí funciona
+     * (`OverlayManager.crearVista()` + `actualizarContenido()` en el otro
+     * proyecto): ahí la ventana NUNCA se agrega vacía. Se agrega la
+     * primera vez que hay un veredicto real, ya con ese contenido. Crearla
+     * antes con texto de relleno dejaba la ventana WRAP_CONTENT fijada en
+     * un tamaño chico para siempre en este dispositivo, sin importar qué
+     * texto se pusiera después — por eso "DI $88" se veía siempre igual
+     * de chico sin importar el nivel real.
+     */
+    private fun ensureOverlayCreated(tierLabel: String, statsText: String, accentColor: Int) {
+        if (overlayContainer != null) return // ya existe, solo hay que actualizar su contenido
+
         if (!Settings.canDrawOverlays(this)) {
             showDebugToast("Sin permiso de overlay, no se puede mostrar encima de otras apps")
             return
@@ -335,10 +356,9 @@ class ScreenCaptureService : Service() {
                 y = (170 * density).toInt()
             }
 
-
             val tierLabelView = TextView(this).apply {
-                text = "…"
-                setTextColor(Color.parseColor("#18FFFF"))
+                text = tierLabel
+                setTextColor(accentColor)
                 setTypeface(Typeface.DEFAULT_BOLD, Typeface.BOLD)
                 setLetterSpacing(0.03f)
                 textSize = 22f
@@ -346,7 +366,7 @@ class ScreenCaptureService : Service() {
             }
 
             val statsView = TextView(this).apply {
-                text = ""
+                text = statsText
                 setTextColor(Color.parseColor("#CCCCCC"))
                 textSize = 14f
                 gravity = Gravity.CENTER
@@ -371,9 +391,10 @@ class ScreenCaptureService : Service() {
                 val padH = (22 * density).toInt()
                 val padV = (14 * density).toInt()
                 setPadding(padH, padV, padH, padV)
-                background = buildOverlayBackground(Color.parseColor("#18FFFF"))
+                background = buildOverlayBackground(accentColor)
                 elevation = 12f
-                visibility = android.view.View.GONE // oculto hasta que haya una oferta real
+                // Ya se agrega VISIBLE y con el contenido final puesto —
+                // nada de GONE/"…" para cambiar después.
 
                 addView(closeButton, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -409,43 +430,38 @@ class ScreenCaptureService : Service() {
 
     private fun updateOverlay(tierLabel: String, statsText: String, accentColor: Int = Color.parseColor("#18FFFF")) {
         mainHandler.post {
+            if (overlayContainer == null) {
+                // Primera oferta real (o primera después de un removeOverlay):
+                // se crea la ventana ya con este contenido.
+                ensureOverlayCreated(tierLabel, statsText, accentColor)
+                return@post
+            }
+
+            // La ventana ya existe y ya tenía contenido real (nunca estuvo
+            // vacía/oculta) — un simple cambio de texto es todo lo que hace
+            // falta; WRAP_CONTENT se reajusta solo. Nada de measure() ni
+            // updateViewLayout() manual: eso fue lo que rompía el
+            // auto-resize en los intentos anteriores.
             overlayTierLabel?.apply {
                 text = tierLabel
                 setTextColor(accentColor)
             }
             overlayStats?.text = statsText
-            overlayContainer?.background = buildOverlayBackground(accentColor)
-
-            // OJO: requestLayout() + updateViewLayout() NO fuerza de forma
-            // confiable un remedido real en una ventana WRAP_CONTENT de tipo
-            // overlay en varios fabricantes (Samsung/OPPO/MIUI). El síntoma
-            // exacto es este: la ventana se queda con el tamaño que tenía la
-            // PRIMERA vez que se agregó (oculta, con texto "…"), así que al
-            // cambiar a "DIAMANTE" el texto se ve comprimido/cortado ("DI") y
-            // las stats truncadas ("$88" en vez de "$31.9/km · $347/h").
-            //
-            // La única forma confiable de forzar un remedido real es quitar
-            // la ventana y volver a agregarla ya con el contenido final
-            // puesto, para que el primer (y único) medido sea el correcto.
-            val container = overlayContainer ?: return@post
-            val params = overlayParams ?: return@post
-            try {
-                windowManager?.removeViewImmediate(container)
-            } catch (_: Exception) {
-                // pudo no estar adjunta todavía; se ignora
-            }
-            container.visibility = android.view.View.VISIBLE
-            try {
-                windowManager?.addView(container, params)
-            } catch (e: Exception) {
-                showDebugToast("ERROR reagregando overlay: ${e.message}")
+            overlayContainer?.apply {
+                background = buildOverlayBackground(accentColor)
+                visibility = android.view.View.VISIBLE
             }
         }
     }
 
     private fun hideOverlay() {
         mainHandler.post {
-            overlayContainer?.visibility = android.view.View.GONE
+            // Se quita la ventana por completo (no solo GONE): así la
+            // próxima vez que haya una oferta real, ensureOverlayCreated()
+            // la vuelve a crear ya con el contenido correcto desde cero,
+            // en vez de reciclar una ventana que pudo quedar con un
+            // tamaño viejo.
+            removeOverlay()
         }
     }
 
