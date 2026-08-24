@@ -8,25 +8,15 @@ import java.util.UUID
 
 /**
  * Maneja la activación y verificación de licencias contra tu servidor.
+ * Contrato confirmado contra tu server.js real:
  *
- * ⚠️ IMPORTANTE: las rutas ACTIVATE_PATH y STATUS_PATH son mi mejor
- * suposición basada en el modelo de datos que vi en tu panel admin.html
- * (cliente, key, expiraEn, activa, creadaEn) — ese panel solo mostraba los
- * endpoints /api/admin/licenses/*, protegidos con x-admin-secret, para TU
- * uso como administrador. No vi ningún endpoint público para que la APP
- * del cliente active su propia clave.
+ *   POST /api/license/activate   body: {"key", "deviceId"}
+ *     -> 200 {"ok": true, "cliente": "...", "expiraEn": 123}
+ *     -> 4xx {"ok": false, "error": "..."}
  *
- * Si tu servidor ya tiene una ruta pública distinta para esto, dime cuál es
- * exactamente (método, path, body esperado, forma de la respuesta) y ajusto
- * este archivo. Si no existe todavía, vas a necesitar agregarla en tu
- * backend con este contrato (o el que prefieras, avísame):
- *
- *   POST /api/license/activate   body: {"key": "...", "deviceId": "..."}
- *     -> 200 {"ok": true, "expiraEn": 1234567890123}
- *     -> 200 {"ok": false, "error": "Clave inválida o ya activada"}
- *
- *   GET /api/license/status?key=...&deviceId=...
- *     -> 200 {"activa": true, "expiraEn": 1234567890123}
+ *   POST /api/license/verify     body: {"key", "deviceId"}
+ *     -> 200 {"valid": true, "expiraEn": 123}
+ *     -> 200 {"valid": false, "reason": "..."}
  */
 object LicenseManager {
     private const val PREFS = "license_prefs"
@@ -37,7 +27,7 @@ object LicenseManager {
 
     private const val BASE_URL = "http://144.126.137.93:1763"
     private const val ACTIVATE_PATH = "/api/license/activate"
-    private const val STATUS_PATH = "/api/license/status"
+    private const val VERIFY_PATH = "/api/license/verify"
 
     const val WHATSAPP_NUMBER = "523344800814" // 52 = México, sin + ni 00
 
@@ -95,17 +85,22 @@ object LicenseManager {
         val key = getSavedKey(context) ?: return Result.Error("Sin licencia guardada")
         return try {
             val deviceId = getDeviceId(context)
-            val json = getJson("$BASE_URL$STATUS_PATH?key=$key&deviceId=$deviceId")
+            val body = JSONObject().apply {
+                put("key", key)
+                put("deviceId", deviceId)
+            }.toString()
 
-            val activa = json.optBoolean("activa", false)
-            val expiraEn = json.optLong("expiraEn", 0L)
+            val json = postJson("$BASE_URL$VERIFY_PATH", body)
+
+            val valid = json.optBoolean("valid", false)
+            val expiraEn = json.optLong("expiraEn", getExpiresAt(context))
             prefs(context).edit()
-                .putBoolean(KEY_ACTIVE, activa)
+                .putBoolean(KEY_ACTIVE, valid)
                 .putLong(KEY_EXPIRES_AT, expiraEn)
                 .apply()
 
-            if (activa && expiraEn > System.currentTimeMillis()) Result.Success(expiraEn)
-            else Result.Error("Licencia no activa o vencida")
+            if (valid) Result.Success(expiraEn)
+            else Result.Error(json.optString("reason", "Licencia no válida"))
         } catch (e: Exception) {
             // Sin internet: seguimos confiando en el último estado guardado
             // localmente en vez de bloquear al usuario de golpe.
@@ -122,17 +117,6 @@ object LicenseManager {
             readTimeout = 10000
         }
         conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-        val text = stream.bufferedReader().use { it.readText() }
-        return JSONObject(text)
-    }
-
-    private fun getJson(urlStr: String): JSONObject {
-        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 10000
-            readTimeout = 10000
-        }
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val text = stream.bufferedReader().use { it.readText() }
         return JSONObject(text)

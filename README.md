@@ -15,31 +15,34 @@ conjunto de funciones. Tema visual oscuro/neón, igual que tu panel admin.
   ML Kit Text Recognition para OCR.
 - Dependencias ya declaradas para Google Play Billing y AdMob.
 
-## Sistema de licencias (⚠️ requiere confirmar tus endpoints)
+## Sistema de licencias
 
-La app ahora exige activar una licencia contra tu servidor
-(`144.126.137.93:1763`) antes de dejar usar la captura de ofertas. Vi tu
-panel `admin.html`, pero ese panel solo expone rutas para TI como admin
-(`/api/admin/licenses/*`, protegidas con `x-admin-secret`). No hay ahí
-ninguna ruta pública para que la APP del cliente active su propia clave —
-tuve que inventar un contrato razonable en `LicenseManager.kt`:
+Confirmado contra tu `server.js` real — la app ya usa exactamente estas rutas:
 
 ```
-POST /api/license/activate   body: {"key": "...", "deviceId": "..."}
-  -> {"ok": true, "expiraEn": 1234567890123}
-  -> {"ok": false, "error": "Clave inválida o ya activada"}
+POST /api/license/activate   body: {"key", "deviceId"}
+  -> {"ok": true, "cliente": "...", "expiraEn": 123}
+  -> {"ok": false, "error": "..."}
 
-GET /api/license/status?key=...&deviceId=...
-  -> {"activa": true, "expiraEn": 1234567890123}
+POST /api/license/verify     body: {"key", "deviceId"}
+  -> {"valid": true, "expiraEn": 123}
+  -> {"valid": false, "reason": "..."}
 ```
 
-**Si tu servidor no tiene estas rutas todavía, hay que agregarlas** (la
-activación debe rechazar una clave que ya tenga un `deviceId` distinto
-asociado, para que "solo se pueda activar una vez"). Si prefieres rutas
-distintas, dime el contrato exacto y ajusto `LicenseManager.kt`.
+Tu servidor ya rechaza correctamente activar la misma clave en un segundo
+`deviceId` distinto, así que "solo se puede activar una vez" ya queda
+cubierto del lado del servidor.
 
 El botón de renovación abre WhatsApp (`523344800814`) con un mensaje
 prellenado cuando la licencia está vencida.
+
+⚠️ Nota aparte sobre tu `server.js`: el `ADMIN_SECRET` tiene un valor por
+defecto hardcodeado en el código (`'Jesus2505'`) que se usa si la variable
+de entorno no está puesta. Si ese archivo llega a subirse a un repo (aunque
+sea privado) o si el hosting no tiene la variable de entorno configurada,
+cualquiera con ese secreto por defecto podría administrar tus licencias.
+Vale la pena quitar el fallback y asegurarte de que `ADMIN_SECRET` siempre
+venga de una variable de entorno real.
 
 Desde el botón "Configurar niveles de \$/km" en la pantalla principal puedes
 ajustar los umbrales de cada nivel — 🔴 Rojo (base), 🟠 Naranja, 🟢 Verde,
