@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android bloquea HTTP sin cifrar por defecto desde API 28+. Tu servidor de
+  licencias (144.126.137.93:1763) usa HTTP plano, así que aquí se permite
+  tráfico sin cifrar SOLO hacia esa IP específica — el resto de la app sigue
+  exigiendo HTTPS normalmente.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">144.126.137.93</domain>
+    </domain-config>
+</network-security-config>

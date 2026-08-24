@@ -1,5 +1,6 @@
 package com.anthony.uberviajes.ui
 
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.widget.Button
@@ -21,17 +22,20 @@ class SettingsActivity : AppCompatActivity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#0A0E1A"))
             setPadding(pad, pad, pad, pad)
         }
 
         root.addView(TextView(this).apply {
-            text = "Niveles de rentabilidad (\$/km)"
-            textSize = 20f
+            text = "NIVELES DE RENTABILIDAD (\$/km)"
+            textSize = 18f
+            setTextColor(Color.parseColor("#18FFFF"))
             setPadding(0, 0, 0, pad)
         })
 
         root.addView(TextView(this).apply {
             text = "🔴 ROJO es siempre la base (todo lo que no llegue al umbral de NARANJA)."
+            setTextColor(Color.parseColor("#8A91B0"))
             setPadding(0, 0, 0, pad)
         })
 
@@ -39,8 +43,12 @@ class SettingsActivity : AppCompatActivity() {
             val input = EditText(this).apply {
                 inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
                 setText(initial.toString())
+                setTextColor(Color.WHITE)
             }
-            root.addView(TextView(this).apply { text = label })
+            root.addView(TextView(this).apply {
+                text = label
+                setTextColor(Color.parseColor("#E6E9F5"))
+            })
             root.addView(input)
             return input
         }

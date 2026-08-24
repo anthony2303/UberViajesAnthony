@@ -16,6 +16,7 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.UberViajesAnthony">
 
         <!-- OBLIGATORIO por el SDK de Google Mobile Ads: sin este meta-data,
@@ -36,6 +37,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.LicenseActivity"
+            android:exported="false" />
 
         <activity
             android:name=".ui.SettingsActivity"

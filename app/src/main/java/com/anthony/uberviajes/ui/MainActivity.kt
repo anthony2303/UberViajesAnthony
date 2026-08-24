@@ -15,11 +15,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.anthony.uberviajes.CrashHandler
 import com.anthony.uberviajes.R
+import com.anthony.uberviajes.license.LicenseManager
 import com.anthony.uberviajes.service.ScreenCaptureService
-import com.anthony.uberviajes.ui.SettingsActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,6 +66,54 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
         bindMainScreen()
+        checkLicense()
+    }
+
+    /**
+     * Si no hay ninguna licencia guardada, manda directo a LicenseActivity.
+     * Si hay una guardada pero ya venció (según el último estado conocido),
+     * muestra el diálogo de renovación. También refresca el estado contra
+     * el servidor en segundo plano por si se desactivó/extendió desde el
+     * panel admin.
+     */
+    private fun checkLicense() {
+        if (LicenseManager.getSavedKey(this) == null) {
+            startActivity(Intent(this, LicenseActivity::class.java))
+            finish()
+            return
+        }
+
+        if (!LicenseManager.isCurrentlyValid(this)) {
+            showLicenseExpiredDialog()
+        }
+
+        Thread {
+            val result = LicenseManager.refreshStatus(this)
+            if (result is LicenseManager.Result.Error && LicenseManager.isCurrentlyValid(this).not()) {
+                runOnUiThread { showLicenseExpiredDialog() }
+            }
+        }.start()
+    }
+
+    private fun showLicenseExpiredDialog() {
+        if (isFinishing) return
+        AlertDialog.Builder(this)
+            .setTitle("Tu licencia está vencida")
+            .setMessage("¿Quieres renovarla?")
+            .setPositiveButton("Renovar por WhatsApp") { _, _ -> openWhatsAppRenewal() }
+            .setNegativeButton("Después", null)
+            .setCancelable(true)
+            .show()
+    }
+
+    private fun openWhatsAppRenewal() {
+        val mensaje = "Hola Anthony, quiero renovar mi licencia de Viajes Rentables 2.0"
+        val uri = Uri.parse("https://wa.me/${LicenseManager.WHATSAPP_NUMBER}?text=${Uri.encode(mensaje)}")
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo abrir WhatsApp: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun bindMainScreen() {
@@ -86,6 +135,10 @@ class MainActivity : AppCompatActivity() {
      * Uber/DiDi mientras se comparte pantalla. Paso 2: permiso de captura.
      */
     private fun startCaptureFlow() {
+        if (!LicenseManager.isCurrentlyValid(this)) {
+            showLicenseExpiredDialog()
+            return
+        }
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Primero activa 'Mostrar sobre otras apps'…", Toast.LENGTH_LONG).show()
             val intent = Intent(

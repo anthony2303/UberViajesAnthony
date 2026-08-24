@@ -1,3 +1,10 @@
 <resources>
-    <style name="Theme.UberViajesAnthony" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <style name="Theme.UberViajesAnthony" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">@color/neon</item>
+        <item name="colorPrimaryDark">@color/fondo</item>
+        <item name="colorAccent">@color/neon</item>
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:textColorPrimary">@color/texto</item>
+        <item name="colorButtonNormal">@color/panel</item>
+    </style>
 </resources>

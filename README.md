@@ -1,10 +1,10 @@
-# Uber Viajes Anthony
+# Viajes Rentables 2.0
 
 Skeleton funcional de app Android para evaluar ofertas de viaje (rideshare),
 reconstruido en base a las funciones identificadas en una app anterior tuya
 ("GananciasPro") de la que perdiste el código fuente. **No es una copia
 descompilada** — es código nuevo, escrito desde cero, que implementa el mismo
-conjunto de funciones.
+conjunto de funciones. Tema visual oscuro/neón, igual que tu panel admin.
 
 ## Qué incluye este skeleton
 
@@ -15,7 +15,31 @@ conjunto de funciones.
   ML Kit Text Recognition para OCR.
 - Dependencias ya declaradas para Google Play Billing y AdMob.
 
-## Niveles de rentabilidad ($/km)
+## Sistema de licencias (⚠️ requiere confirmar tus endpoints)
+
+La app ahora exige activar una licencia contra tu servidor
+(`144.126.137.93:1763`) antes de dejar usar la captura de ofertas. Vi tu
+panel `admin.html`, pero ese panel solo expone rutas para TI como admin
+(`/api/admin/licenses/*`, protegidas con `x-admin-secret`). No hay ahí
+ninguna ruta pública para que la APP del cliente active su propia clave —
+tuve que inventar un contrato razonable en `LicenseManager.kt`:
+
+```
+POST /api/license/activate   body: {"key": "...", "deviceId": "..."}
+  -> {"ok": true, "expiraEn": 1234567890123}
+  -> {"ok": false, "error": "Clave inválida o ya activada"}
+
+GET /api/license/status?key=...&deviceId=...
+  -> {"activa": true, "expiraEn": 1234567890123}
+```
+
+**Si tu servidor no tiene estas rutas todavía, hay que agregarlas** (la
+activación debe rechazar una clave que ya tenga un `deviceId` distinto
+asociado, para que "solo se pueda activar una vez"). Si prefieres rutas
+distintas, dime el contrato exacto y ajusto `LicenseManager.kt`.
+
+El botón de renovación abre WhatsApp (`523344800814`) con un mensaje
+prellenado cuando la licencia está vencida.
 
 Desde el botón "Configurar niveles de \$/km" en la pantalla principal puedes
 ajustar los umbrales de cada nivel — 🔴 Rojo (base), 🟠 Naranja, 🟢 Verde,

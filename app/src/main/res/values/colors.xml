@@ -1,3 +1,13 @@
 <resources>
     <color name="ic_launcher_background">#1B5E20</color>
+
+    <!-- Paleta futurista, igual a la del panel admin -->
+    <color name="fondo">#0A0E1A</color>
+    <color name="panel">#12172B</color>
+    <color name="borde">#232A45</color>
+    <color name="neon">#00E5FF</color>
+    <color name="verde_neon">#00E676</color>
+    <color name="rojo_neon">#FF1744</color>
+    <color name="texto">#E6E9F5</color>
+    <color name="texto_tenue">#8A91B0</color>
 </resources>
