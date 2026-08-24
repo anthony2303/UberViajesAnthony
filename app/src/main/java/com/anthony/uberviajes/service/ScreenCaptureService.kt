@@ -311,6 +311,8 @@ class ScreenCaptureService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             }
 
+            val density = resources.displayMetrics.density
+
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -319,12 +321,13 @@ class ScreenCaptureService : Service() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                // Centrado en pantalla — más fácil de leer que pegado a una
-                // esquina donde tapa otros controles.
-                gravity = Gravity.CENTER
+                // Centrado horizontalmente, pegado un poco arriba (debajo del
+                // badge de multiplicador tipo "601" que Uber muestra en la
+                // parte superior), en vez de en medio de la pantalla.
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = (170 * density).toInt()
             }
 
-            val density = resources.displayMetrics.density
 
             val textView = TextView(this).apply {
                 text = "UBER VIAJES ANTHONY\nEsperando oferta…"
