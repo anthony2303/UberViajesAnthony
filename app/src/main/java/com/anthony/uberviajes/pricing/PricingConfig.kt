@@ -45,11 +45,11 @@ object PricingConfig {
         val dorado = p.getFloat(KEY_DORADO, DEFAULT_DORADO.toFloat()).toDouble()
         val diamante = p.getFloat(KEY_DIAMANTE, DEFAULT_DIAMANTE.toFloat()).toDouble()
         return listOf(
-            PricingTier("🔴 ROJO", 0.0, Color.parseColor("#F44336")),
-            PricingTier("🟠 NARANJA", naranja, Color.parseColor("#FF9800")),
-            PricingTier("🟢 VERDE", verde, Color.parseColor("#4CAF50")),
-            PricingTier("🟡 DORADO", dorado, Color.parseColor("#FFD700")),
-            PricingTier("💎 DIAMANTE", diamante, Color.parseColor("#18FFFF"))
+            PricingTier("ROJO", 0.0, Color.parseColor("#F44336")),
+            PricingTier("NARANJA", naranja, Color.parseColor("#FF9800")),
+            PricingTier("VERDE", verde, Color.parseColor("#4CAF50")),
+            PricingTier("DORADO", dorado, Color.parseColor("#FFD700")),
+            PricingTier("DIAMANTE", diamante, Color.parseColor("#18FFFF"))
         )
     }
 

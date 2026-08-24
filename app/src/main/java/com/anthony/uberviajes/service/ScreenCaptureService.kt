@@ -77,7 +77,8 @@ class ScreenCaptureService : Service() {
     // --- Overlay flotante ---
     private var windowManager: WindowManager? = null
     private var overlayContainer: LinearLayout? = null
-    private var overlayText: TextView? = null
+    private var overlayTierLabel: TextView? = null
+    private var overlayStats: TextView? = null
     private var overlayParams: WindowManager.LayoutParams? = null
 
     // Firma de la oferta actualmente mostrada/descartada, para saber si el
@@ -279,14 +280,19 @@ class ScreenCaptureService : Service() {
             offer.fareMx / offer.distanceKm
         } else null
 
+        val ratePerHour = if (offer.minutes != null && offer.minutes > 0) {
+            offer.fareMx * 60.0 / offer.minutes
+        } else null
+
         val tier = PricingConfig.tierFor(this, ratePerKm)
         val minFare = PricingConfig.getMinFare(this)
+
         val ratePerKmText = ratePerKm?.let { "%.1f".format(it) } ?: "N/A"
+        val ratePerHourText = ratePerHour?.let { "%.0f".format(it) } ?: "N/A"
+        val statsText = "\$$ratePerKmText/km  ·  \$$ratePerHourText/h"
 
-        val resumen = "${tier.label}\n\$${offer.fareMx} · ${offer.distanceKm ?: "?"} km · ${offer.minutes ?: "?"} min\n\$/km: $ratePerKmText"
-
-        showDebugToast(resumen.replace("\n", " | "))
-        updateOverlay(resumen, tier.color)
+        showDebugToast("${tier.label} — $statsText")
+        updateOverlay(tier.label, statsText, tier.color)
 
         if (offer.fareMx < minFare) {
             showDebugToast("(tarifa \$${offer.fareMx} está bajo el mínimo absoluto de \$$minFare)")
@@ -330,13 +336,22 @@ class ScreenCaptureService : Service() {
             }
 
 
-            val textView = TextView(this).apply {
-                text = "UBER VIAJES ANTHONY\nEsperando oferta…"
-                setTextColor(Color.WHITE)
-                typeface = Typeface.MONOSPACE
-                setLetterSpacing(0.05f)
-                textSize = 13f
+            val tierLabelView = TextView(this).apply {
+                text = "…"
+                setTextColor(Color.parseColor("#18FFFF"))
+                setTypeface(Typeface.DEFAULT_BOLD, Typeface.BOLD)
+                setLetterSpacing(0.03f)
+                textSize = 22f
                 gravity = Gravity.CENTER
+            }
+
+            val statsView = TextView(this).apply {
+                text = ""
+                setTextColor(Color.parseColor("#CCCCCC"))
+                textSize = 14f
+                gravity = Gravity.CENTER
+                val topPad = (4 * density).toInt()
+                setPadding(0, topPad, 0, 0)
             }
 
             val closeButton = TextView(this).apply {
@@ -353,7 +368,7 @@ class ScreenCaptureService : Service() {
 
             val container = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                val padH = (18 * density).toInt()
+                val padH = (22 * density).toInt()
                 val padV = (14 * density).toInt()
                 setPadding(padH, padV, padH, padV)
                 background = buildOverlayBackground(Color.parseColor("#18FFFF"))
@@ -364,13 +379,15 @@ class ScreenCaptureService : Service() {
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { gravity = Gravity.END })
-                addView(textView)
+                addView(tierLabelView)
+                addView(statsView)
             }
 
             windowManager?.addView(container, params)
             overlayContainer = container
             overlayParams = params
-            overlayText = textView
+            overlayTierLabel = tierLabelView
+            overlayStats = statsView
         } catch (e: Exception) {
             showDebugToast("ERROR agregando overlay: ${e.message}")
         }
@@ -390,9 +407,13 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    private fun updateOverlay(text: String, accentColor: Int = Color.parseColor("#18FFFF")) {
+    private fun updateOverlay(tierLabel: String, statsText: String, accentColor: Int = Color.parseColor("#18FFFF")) {
         mainHandler.post {
-            overlayText?.text = "UBER VIAJES ANTHONY\n$text"
+            overlayTierLabel?.apply {
+                text = tierLabel
+                setTextColor(accentColor)
+            }
+            overlayStats?.text = statsText
             overlayContainer?.apply {
                 background = buildOverlayBackground(accentColor)
                 visibility = android.view.View.VISIBLE
@@ -424,7 +445,8 @@ class ScreenCaptureService : Service() {
             // la vista ya pudo haber sido removida por el sistema
         }
         overlayContainer = null
-        overlayText = null
+        overlayTierLabel = null
+        overlayStats = null
     }
 
     /**
