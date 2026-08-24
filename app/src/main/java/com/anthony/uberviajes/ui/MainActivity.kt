@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.anthony.uberviajes.CrashHandler
 import com.anthony.uberviajes.R
 import com.anthony.uberviajes.service.ScreenCaptureService
+import com.anthony.uberviajes.ui.SettingsActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -72,6 +73,10 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnStartCapture).setOnClickListener {
             startCaptureFlow()
+        }
+
+        findViewById<Button>(R.id.btnSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
     }
 

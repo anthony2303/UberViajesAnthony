@@ -8,6 +8,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -24,6 +26,7 @@ import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.anthony.uberviajes.pricing.PricingConfig
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -63,9 +66,8 @@ class ScreenCaptureService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastDebugToastAt = 0L
 
-    // TODO: ajusta estos umbrales a tus criterios reales de "viaje rentable"
-    private var minFareMx = 60.0
-    private var minRatePerKm = 12.0
+    // Los umbrales de $/km ahora se manejan en PricingConfig (configurables
+    // desde SettingsActivity), no hace falta guardarlos aquí.
 
     private val textRecognizer by lazy {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -250,15 +252,18 @@ class ScreenCaptureService : Service() {
             offer.fareMx / offer.distanceKm
         } else null
 
-        val isRentable = offer.fareMx >= minFareMx &&
-            (ratePerKm == null || ratePerKm >= minRatePerKm)
-
+        val tier = PricingConfig.tierFor(this, ratePerKm)
+        val minFare = PricingConfig.getMinFare(this)
         val ratePerKmText = ratePerKm?.let { "%.1f".format(it) } ?: "N/A"
-        val veredicto = if (isRentable) "✅ RENTABLE" else "❌ NO rentable"
-        val resumen = "$veredicto\n\$${offer.fareMx} · ${offer.distanceKm ?: "?"} km · ${offer.minutes ?: "?"} min\n\$/km: $ratePerKmText"
+
+        val resumen = "${tier.label}\n\$${offer.fareMx} · ${offer.distanceKm ?: "?"} km · ${offer.minutes ?: "?"} min\n\$/km: $ratePerKmText"
 
         showDebugToast(resumen.replace("\n", " | "))
-        updateOverlay(resumen)
+        updateOverlay(resumen, tier.color)
+
+        if (offer.fareMx < minFare) {
+            showDebugToast("(tarifa \$${offer.fareMx} está bajo el mínimo absoluto de \$$minFare)")
+        }
     }
 
     // --- Overlay flotante ---
@@ -288,18 +293,23 @@ class ScreenCaptureService : Service() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = 24
-                y = 120
+                // Centrado en pantalla, como se pidió — más fácil de leer
+                // que pegado a una esquina donde tapa otros controles.
+                gravity = Gravity.CENTER
             }
 
             val view = TextView(this).apply {
-                text = "Uber Viajes Anthony\nEsperando oferta…"
+                text = "UBER VIAJES ANTHONY\nEsperando oferta…"
                 setTextColor(Color.WHITE)
-                setBackgroundColor(Color.argb(230, 20, 20, 20))
-                textSize = 12f
-                val pad = (10 * resources.displayMetrics.density).toInt()
-                setPadding(pad, pad, pad, pad)
+                typeface = Typeface.MONOSPACE
+                setLetterSpacing(0.05f)
+                textSize = 13f
+                gravity = Gravity.CENTER
+                val padH = (18 * resources.displayMetrics.density).toInt()
+                val padV = (14 * resources.displayMetrics.density).toInt()
+                setPadding(padH, padV, padH, padV)
+                background = buildOverlayBackground(Color.parseColor("#18FFFF"))
+                elevation = 12f
             }
 
             windowManager?.addView(view, params)
@@ -309,9 +319,26 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    private fun updateOverlay(text: String) {
+    /**
+     * Fondo "futurista": esquinas redondeadas, negro casi opaco, con un
+     * borde de neón del color del nivel actual (rojo/naranja/verde/
+     * dorado/diamante).
+     */
+    private fun buildOverlayBackground(accentColor: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 20f
+            setColor(Color.argb(235, 8, 10, 18))
+            setStroke((2.5f * resources.displayMetrics.density).toInt(), accentColor)
+        }
+    }
+
+    private fun updateOverlay(text: String, accentColor: Int = Color.parseColor("#18FFFF")) {
         mainHandler.post {
-            overlayView?.text = "Uber Viajes Anthony\n$text"
+            overlayView?.apply {
+                this.text = "UBER VIAJES ANTHONY\n$text"
+                background = buildOverlayBackground(accentColor)
+            }
         }
     }
 

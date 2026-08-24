@@ -15,6 +15,13 @@ conjunto de funciones.
   ML Kit Text Recognition para OCR.
 - Dependencias ya declaradas para Google Play Billing y AdMob.
 
+## Niveles de rentabilidad ($/km)
+
+Desde el botón "Configurar niveles de \$/km" en la pantalla principal puedes
+ajustar los umbrales de cada nivel — 🔴 Rojo (base), 🟠 Naranja, 🟢 Verde,
+🟡 Dorado, 💎 Diamante. El overlay flotante usa el color del nivel actual
+como borde de neón.
+
 ## Estado actual
 
 - ✅ `ScreenCaptureService`: conversión `Image → Bitmap` implementada, llamada

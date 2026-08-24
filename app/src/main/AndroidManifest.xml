@@ -37,6 +37,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false" />
+
         <!-- Captura de pantalla + OCR para leer ofertas de viaje cuando el
              modo accesibilidad falla (Samsung/OPPO, mismo patrón que Viajes Rentables) -->
         <service

@@ -26,4 +26,14 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="24dp" />
 
+    <Button
+        android:id="@+id/btnSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Configurar niveles de $/km"
+        app:layout_constraintTop_toBottomOf="@id/btnStartCapture"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
