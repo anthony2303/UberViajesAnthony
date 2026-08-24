@@ -78,6 +78,7 @@ class ScreenCaptureService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayContainer: LinearLayout? = null
     private var overlayText: TextView? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
 
     // Firma de la oferta actualmente mostrada/descartada, para saber si el
     // usuario ya la cerró con la ✕ y no reaparezca sola mientras siga siendo
@@ -368,6 +369,7 @@ class ScreenCaptureService : Service() {
 
             windowManager?.addView(container, params)
             overlayContainer = container
+            overlayParams = params
             overlayText = textView
         } catch (e: Exception) {
             showDebugToast("ERROR agregando overlay: ${e.message}")
@@ -394,6 +396,17 @@ class ScreenCaptureService : Service() {
             overlayContainer?.apply {
                 background = buildOverlayBackground(accentColor)
                 visibility = android.view.View.VISIBLE
+            }
+            // Fuerza a WindowManager a volver a medir la ventana con el
+            // contenido actual — sin esto, una ventana WRAP_CONTENT se queda
+            // con el tamaño que tenía la PRIMERA vez que se agregó (en este
+            // caso, oculta/casi vacía), y el texto nuevo se ve comprimido
+            // partiéndose letra por letra.
+            try {
+                overlayContainer?.requestLayout()
+                windowManager?.updateViewLayout(overlayContainer, overlayParams)
+            } catch (_: Exception) {
+                // la vista pudo no estar adjunta todavía; se ignora
             }
         }
     }
