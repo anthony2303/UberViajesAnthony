@@ -117,6 +117,16 @@ class ScreenCaptureService : Service() {
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = projectionManager.getMediaProjection(resultCode, data)
 
+        // Obligatorio desde Android 14 (API 34): hay que registrar un
+        // callback ANTES de createVirtualDisplay(), o revienta con
+        // IllegalStateException("Must register a callback...").
+        mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                showDebugToast("La proyección de pantalla se detuvo")
+                stopSelf()
+            }
+        }, mainHandler)
+
         val metrics = resources.displayMetrics
         captureWidth = metrics.widthPixels
         captureHeight = metrics.heightPixels
