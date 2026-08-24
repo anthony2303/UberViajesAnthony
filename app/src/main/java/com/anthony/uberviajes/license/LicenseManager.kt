@@ -25,7 +25,7 @@ object LicenseManager {
     private const val KEY_ACTIVE = "license_active"
     private const val KEY_EXPIRES_AT = "license_expires_at"
 
-    private const val BASE_URL = "http://144.126.137.93:1763"
+    private const val BASE_URL = "http://144.126.137.93:1743"
     private const val ACTIVATE_PATH = "/api/license/activate"
     private const val VERIFY_PATH = "/api/license/verify"
 
