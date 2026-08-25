@@ -244,31 +244,34 @@ class ScreenCaptureService : Service() {
 
     /**
      * Extrae tarifa (MXN), distancia (km) y tiempo (min) del texto
-     * reconocido. Calibrado con una oferta real de Uber:
+     * reconocido. Calibrado con ofertas reales de Uber:
      *
      *   "$32.96 ... Total: 23 min (9.7 km) ..."
      *
-     * A propósito exige que aparezcan LOS TRES juntos (tarifa + km + min) —
-     * así una pantalla que solo tiene un "$" suelto (p. ej. ganancias del
-     * día, resumen semanal) no se confunde con una oferta de viaje real, que
-     * era lo que dejaba el overlay "pegado" mostrando una oferta vieja.
+     * A propósito exige el patrón EXACTO "Total: X min (Y km)" en vez de
+     * buscar "cualquier km" y "cualquier min" sueltos en toda la pantalla —
+     * una pantalla de "Detalles del viaje" (viaje ya completado) también
+     * tiene un $ y campos separados de "Duración"/"Distancia", y con el
+     * patrón suelto eso se confundía con una oferta nueva.
      *
      * Si tu formato varía entre Uber/DiDi/Cabify, puede que necesites
-     * ajustar estos patrones — mándame otra captura de pantalla del texto
+     * ajustar este patrón — mándame otra captura de pantalla del texto
      * que no matchee y lo afinamos.
      */
     private fun parseTripOffer(text: String): TripOffer? {
         val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:[.,]\\d{1,2})?)").matcher(text)
-        val kmMatch = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s?km").matcher(text)
-        val minMatch = Pattern.compile("(\\d+)\\s?min").matcher(text)
+        val totalMatch = Pattern.compile(
+            "Total:?\\s*(\\d+)\\s*min\\s*\\((\\d+(?:[.,]\\d+)?)\\s*km\\)"
+        ).matcher(text)
 
         val fare = if (fareMatch.find()) fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
-        val km = if (kmMatch.find()) kmMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
-        val min = if (minMatch.find()) minMatch.group(1)?.toIntOrNull() else null
 
-        // Los tres deben estar presentes — si falta km o min, no lo tratamos
-        // como oferta real (evita falsos positivos de un "$" suelto).
-        if (fare == null || km == null || min == null) return null
+        if (fare == null || !totalMatch.find()) return null
+
+        val min = totalMatch.group(1)?.toIntOrNull()
+        val km = totalMatch.group(2)?.replace(",", ".")?.toDoubleOrNull()
+
+        if (min == null || km == null) return null
         return TripOffer(fareMx = fare, distanceKm = km, minutes = min)
     }
 
