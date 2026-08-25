@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/contenedorOverlay"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:minWidth="180dp"
+    android:paddingHorizontal="20dp"
+    android:paddingVertical="14dp">
+
+    <TextView
+        android:id="@+id/tvOverlayClose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:text="✕"
+        android:textColor="@color/overlay_texto"
+        android:textSize="15sp"
+        android:padding="4dp" />
+
+    <TextView
+        android:id="@+id/tvOverlayResultado"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/overlay_texto"
+        android:textStyle="bold"
+        android:textSize="17sp"
+        android:letterSpacing="0.08"
+        android:text="ANALIZANDO..." />
+
+    <TextView
+        android:id="@+id/tvOverlayDetalle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/texto_tenue"
+        android:fontFamily="monospace"
+        android:textSize="13sp"
+        android:text="" />
+
+</LinearLayout>

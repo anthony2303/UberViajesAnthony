@@ -8,7 +8,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -22,11 +21,13 @@ import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.anthony.uberviajes.R
 import com.anthony.uberviajes.pricing.PricingConfig
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
@@ -359,56 +360,26 @@ class ScreenCaptureService : Service() {
                 y = (170 * density).toInt()
             }
 
-            val tierLabelView = TextView(this).apply {
+            // Inflar desde XML (overlay_trip_info.xml) en vez de construir las
+            // vistas a mano en Kotlin — este es el patrón que ya probaste que
+            // funciona en tu otro proyecto (OverlayManager.crearVista()).
+            val vista = LayoutInflater.from(this).inflate(R.layout.overlay_trip_info, null) as LinearLayout
+            vista.background = buildOverlayBackground(accentColor)
+
+            val tierLabelView = vista.findViewById<TextView>(R.id.tvOverlayResultado).apply {
                 text = tierLabel
                 setTextColor(accentColor)
-                setTypeface(Typeface.DEFAULT_BOLD, Typeface.BOLD)
-                setLetterSpacing(0.03f)
-                textSize = 22f
-                gravity = Gravity.CENTER
             }
-
-            val statsView = TextView(this).apply {
+            val statsView = vista.findViewById<TextView>(R.id.tvOverlayDetalle).apply {
                 text = statsText
-                setTextColor(Color.parseColor("#CCCCCC"))
-                textSize = 14f
-                gravity = Gravity.CENTER
-                val topPad = (4 * density).toInt()
-                setPadding(0, topPad, 0, 0)
+            }
+            vista.findViewById<TextView>(R.id.tvOverlayClose).setOnClickListener {
+                dismissedSignature = currentSignature
+                hideOverlay()
             }
 
-            val closeButton = TextView(this).apply {
-                text = "✕"
-                setTextColor(Color.WHITE)
-                textSize = 15f
-                val pad = (6 * density).toInt()
-                setPadding(pad, 0, pad, pad)
-                setOnClickListener {
-                    dismissedSignature = currentSignature
-                    hideOverlay()
-                }
-            }
-
-            val container = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                val padH = (22 * density).toInt()
-                val padV = (14 * density).toInt()
-                setPadding(padH, padV, padH, padV)
-                background = buildOverlayBackground(accentColor)
-                elevation = 12f
-                // Ya se agrega VISIBLE y con el contenido final puesto —
-                // nada de GONE/"…" para cambiar después.
-
-                addView(closeButton, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { gravity = Gravity.END })
-                addView(tierLabelView)
-                addView(statsView)
-            }
-
-            windowManager?.addView(container, params)
-            overlayContainer = container
+            windowManager?.addView(vista, params)
+            overlayContainer = vista
             overlayParams = params
             overlayTierLabel = tierLabelView
             overlayStats = statsView
