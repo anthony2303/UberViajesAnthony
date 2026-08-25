@@ -170,6 +170,8 @@ class ScreenCaptureService : Service() {
         }, mainHandler)
     }
 
+    private var lastFrameProcessedAt = 0L
+
     private fun processImage(image: Image) {
         // Evita solapar llamadas a ML Kit si el frame anterior aún no terminó.
         if (isProcessing) {
@@ -177,20 +179,38 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        // Límite de frecuencia: sin esto, el VirtualDisplay puede mandar
+        // muchos cuadros por segundo (cada vez que el mapa se redibuja),
+        // y cada uno crea un Bitmap de pantalla completa (~10MB). Con el
+        // tiempo eso satura la memoria y probablemente era la causa de que
+        // la app se cerrara sola después de un rato.
+        val now = System.currentTimeMillis()
+        if (now - lastFrameProcessedAt < 1000) {
+            image.close()
+            return
+        }
+        lastFrameProcessedAt = now
+
+        var bitmap: Bitmap? = null
         try {
-            val bitmap = imageToBitmap(image)
+            bitmap = imageToBitmap(image)
             isProcessing = true
             val inputImage = InputImage.fromBitmap(bitmap, 0)
+            val bitmapToRecycle = bitmap
 
             textRecognizer.process(inputImage)
                 .addOnSuccessListener { visionText -> handleRecognizedText(visionText) }
                 .addOnFailureListener { e ->
                     showDebugToast("ERROR de ML Kit OCR: ${e.message}")
                 }
-                .addOnCompleteListener { isProcessing = false }
+                .addOnCompleteListener {
+                    isProcessing = false
+                    bitmapToRecycle.recycle()
+                }
         } catch (e: Exception) {
             showDebugToast("ERROR procesando frame: ${e.message}")
             isProcessing = false
+            bitmap?.recycle()
         } finally {
             image.close()
         }
@@ -217,7 +237,9 @@ class ScreenCaptureService : Service() {
         return if (rowPadding == 0) {
             bitmap
         } else {
-            Bitmap.createBitmap(bitmap, 0, 0, captureWidth, captureHeight)
+            val cropped = Bitmap.createBitmap(bitmap, 0, 0, captureWidth, captureHeight)
+            bitmap.recycle()
+            cropped
         }
     }
 
