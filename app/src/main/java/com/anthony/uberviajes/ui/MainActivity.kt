@@ -69,6 +69,16 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         bindMainScreen()
         checkLicense()
+
+        // Si venimos de la notificación "Captura de pantalla detenida",
+        // disparamos el flujo de reanudar automáticamente — el permiso de
+        // captura en sí SIEMPRE requiere que el usuario lo confirme de
+        // nuevo (Android no deja reanudar en silencio una vez que el
+        // sistema la cortó), pero así evitamos que tenga que buscar el
+        // botón manualmente.
+        if (intent?.getBooleanExtra(ScreenCaptureService.EXTRA_AUTO_RESUME, false) == true) {
+            startCaptureFlow()
+        }
     }
 
     /**

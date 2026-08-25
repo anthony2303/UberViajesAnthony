@@ -50,8 +50,10 @@ class ScreenCaptureService : Service() {
     companion object {
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
+        const val EXTRA_AUTO_RESUME = "extra_auto_resume"
         private const val CHANNEL_ID = "screen_capture_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val RESUME_NOTIFICATION_ID = 1002
     }
 
     private var mediaProjection: MediaProjection? = null
@@ -141,7 +143,13 @@ class ScreenCaptureService : Service() {
         // IllegalStateException("Must register a callback...").
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
-                showDebugToast("La proyección de pantalla se detuvo")
+                // Android corta la proyección a propósito cuando se apaga la
+                // pantalla (protección de privacidad del sistema — ninguna
+                // app puede evitar esto). No podemos "seguir grabando" con
+                // la pantalla apagada, pero sí dejamos un acceso directo de
+                // un toque para reanudar en cuanto se vuelva a encender.
+                showDebugToast("La captura se detuvo (¿se apagó la pantalla?)")
+                notifyProjectionStoppedWithResumeAction()
                 stopSelf()
             }
         }, mainHandler)
@@ -516,6 +524,38 @@ class ScreenCaptureService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
+
+    /**
+     * Notificación aparte (no la del foreground service) que se muestra
+     * cuando el sistema corta la proyección — normalmente por apagar la
+     * pantalla. Al tocarla abre MainActivity con un extra que dispara el
+     * flujo de captura automáticamente, para que reanudar sea de un solo
+     * toque en vez de tener que navegar la app de nuevo.
+     */
+    private fun notifyProjectionStoppedWithResumeAction() {
+        val resumeIntent = Intent(this, com.anthony.uberviajes.ui.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_AUTO_RESUME, true)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            this,
+            0,
+            resumeIntent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Captura de pantalla detenida")
+            .setContentText("Probablemente se apagó la pantalla. Toca para reanudar.")
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(RESUME_NOTIFICATION_ID, notification)
     }
 
     override fun onDestroy() {
