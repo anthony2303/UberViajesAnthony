@@ -49,6 +49,22 @@ ajustar los umbrales de cada nivel — 🔴 Rojo (base), 🟠 Naranja, 🟢 Verd
 🟡 Dorado, 💎 Diamante. El overlay flotante usa el color del nivel actual
 como borde de neón.
 
+## Segundo plano
+
+Antes de pedir el permiso de captura de pantalla, la app ahora pide quedar
+excluida de la optimización de batería (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+y la notificación del servicio es "ongoing" (no se puede deslizar para
+quitarla) — ambas cosas ayudan a que Android no mate el servicio mientras
+trabajas en la app de Uber/DiDi.
+
+⚠️ En algunas marcas (Xiaomi/MIUI, Huawei, Honor, Oppo, Vivo) eso no basta —
+tienen su propio "administrador de batería" con un permiso extra de
+"Autoarranque"/"Inicio automático" que no se puede pedir por código; hay que
+activarlo a mano en Ajustes del sistema → Batería → (nombre de la app) →
+"Sin restricciones" / "Permitir actividad en segundo plano". Si después de
+este cambio la app se sigue cerrando, revisa esa opción según tu marca de
+celular.
+
 ## Estado actual
 
 - ✅ `ScreenCaptureService`: conversión `Image → Bitmap` implementada, llamada

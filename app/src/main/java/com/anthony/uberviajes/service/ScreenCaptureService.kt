@@ -510,9 +510,11 @@ class ScreenCaptureService : Service() {
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Uber Viajes Anthony")
-            .setContentText("Analizando ofertas de viaje…")
+            .setContentTitle("Viajes Rentables 2.0")
+            .setContentText("Analizando ofertas de viaje en segundo plano…")
             .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 

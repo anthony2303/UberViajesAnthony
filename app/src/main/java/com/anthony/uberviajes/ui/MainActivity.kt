@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
@@ -129,16 +131,52 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Pantalla del sistema para excluir la app de la optimización de
+    // batería. No hay callback de éxito/fallo directo; al volver revisamos
+    // el estado real con isIgnoringBatteryOptimizations().
+    private val batteryOptimizationLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            proceedAfterBatteryCheck()
+        }
+
     /**
-     * Paso 1: permiso de overlay ("Mostrar sobre otras apps"), igual que en
-     * GananciasPro — es lo que permite que el resultado se vea ENCIMA de
-     * Uber/DiDi mientras se comparte pantalla. Paso 2: permiso de captura.
+     * Paso 0 (antes que overlay/captura): pide que la app quede excluida de
+     * la optimización de batería. Sin esto, en varias marcas (Xiaomi,
+     * Huawei, Honor, Oppo, Samsung) el sistema mata el servicio de captura
+     * después de un rato en segundo plano, aunque sea un foreground service.
      */
     private fun startCaptureFlow() {
         if (!LicenseManager.isCurrentlyValid(this)) {
             showLicenseExpiredDialog()
             return
         }
+
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !powerManager.isIgnoringBatteryOptimizations(packageName)
+        ) {
+            Toast.makeText(
+                this,
+                "Permite que la app corra sin restricciones de batería, o se puede cerrar sola en segundo plano…",
+                Toast.LENGTH_LONG
+            ).show()
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:$packageName")
+            )
+            try {
+                batteryOptimizationLauncher.launch(intent)
+            } catch (e: Exception) {
+                // Algunos fabricantes bloquean este intent; seguimos igual.
+                proceedAfterBatteryCheck()
+            }
+            return
+        }
+
+        proceedAfterBatteryCheck()
+    }
+
+    private fun proceedAfterBatteryCheck() {
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Primero activa 'Mostrar sobre otras apps'…", Toast.LENGTH_LONG).show()
             val intent = Intent(
