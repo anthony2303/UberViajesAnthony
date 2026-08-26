@@ -301,9 +301,12 @@ class ScreenCaptureService : Service() {
      *
      *  1) Posición: el "$" tiene que aparecer ANTES del patrón "Total: X min
      *     (Y km)" en el texto — así como está la tarjeta real (la tarifa
-     *     arriba, el resumen de tiempo/distancia abajo) — y a no más de 80
-     *     caracteres de distancia. Un "$" de otra parte de la pantalla
-     *     (ganancias del día, otro elemento) casi nunca cae justo ahí.
+     *     arriba, el resumen de tiempo/distancia abajo) — y a no más de 120
+     *     caracteres de distancia. Además se toma la PRIMERA coincidencia
+     *     de esa ventana (la más cercana a la tarifa real de arriba), no la
+     *     última — tomar la última a veces agarraba ruido del OCR en el
+     *     mapa (íconos, precios de otros lugares en el heatmap) que quedaba
+     *     más cerca de "Total:" que la tarifa real.
      *  2) Rango: se descarta cualquier valor fuera de lo que puede ser un
      *     viaje real (tarifa $5–$600, distancia 0.05–150 km, tiempo 1–180
      *     min) — un dato fuera de rango es casi seguro un error de OCR.
@@ -323,18 +326,18 @@ class ScreenCaptureService : Service() {
         val km = totalMatch.group(2)?.replace(",", ".")?.toDoubleOrNull() ?: return null
 
         // Solo se busca la tarifa en el tramo de texto ANTES de "Total:",
-        // y no más lejos de 80 caracteres — no en toda la pantalla.
+        // y no más lejos de 120 caracteres — no en toda la pantalla.
         val totalStart = totalMatch.start()
-        val ventanaAntes = text.substring(maxOf(0, totalStart - 80), totalStart)
+        val ventanaAntes = text.substring(maxOf(0, totalStart - 120), totalStart)
 
+        // Toma la PRIMERA coincidencia dentro de la ventana: en la tarjeta
+        // real, la tarifa aparece arriba de todo, seguida de etiquetas
+        // ("Garantizado", "Puede incluir propina") y luego "Total:". Tomar
+        // la última (la más cercana a "Total:") a veces agarraba ruido del
+        // OCR en el mapa (íconos, precios de otros restaurantes) en vez de
+        // la tarifa real.
         val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:[.,]\\d{1,2})?)").matcher(ventanaAntes)
-        // Toma la ÚLTIMA coincidencia dentro de la ventana (la más cercana
-        // a "Total:", que es la más probable de ser la tarifa de esta
-        // tarjeta y no un residuo de texto anterior).
-        var fare: Double? = null
-        while (fareMatch.find()) {
-            fare = fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull()
-        }
+        val fare = if (fareMatch.find()) fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
         if (fare == null) return null
 
         // Capa 2: rangos razonables para un viaje real.
