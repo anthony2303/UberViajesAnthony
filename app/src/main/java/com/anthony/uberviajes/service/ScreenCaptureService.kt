@@ -90,6 +90,14 @@ class ScreenCaptureService : Service() {
     private var dismissedSignature: String? = null
     private var currentSignature: String? = null
 
+    // Doble confirmación: una oferta solo se muestra cuando se lee DOS
+    // VECES SEGUIDAS con el mismo resultado. El OCR a veces lee mal un
+    // dígito de la tarifa en una sola pasada (imagen borrosa, mal enfoque);
+    // la oferta real se sigue leyendo igual en la siguiente pasada, pero un
+    // error suelto casi nunca se repite exacto dos veces seguidas.
+    private var pendingSignature: String? = null
+    private var pendingOffer: TripOffer? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -267,6 +275,8 @@ class ScreenCaptureService : Service() {
             showDebugToast("Sin oferta completa (tarifa+km+min) en pantalla")
             currentSignature = null
             dismissedSignature = null // ya no está en pantalla, se olvida el descarte
+            pendingSignature = null
+            pendingOffer = null
             hideOverlay()
             return
         }
@@ -350,13 +360,26 @@ class ScreenCaptureService : Service() {
 
     private fun evaluateOffer(offer: TripOffer) {
         val signature = "${offer.fareMx}-${offer.distanceKm}-${offer.minutes}"
-        currentSignature = signature
 
         if (signature == dismissedSignature) {
             // El usuario ya cerró esta misma oferta con la ✕; sigue en
             // pantalla pero no la volvemos a mostrar hasta que cambie.
             return
         }
+
+        if (signature != pendingSignature) {
+            // Primera vez que se lee esta combinación exacta — se guarda
+            // como "pendiente" pero NO se muestra todavía. Si la siguiente
+            // pasada confirma lo mismo, ahí sí se muestra (ver abajo).
+            pendingSignature = signature
+            pendingOffer = offer
+            return
+        }
+        // Segunda lectura consecutiva con el MISMO resultado — confirmada.
+        // Recién aquí se actualiza currentSignature (lo que usa el botón ✕
+        // para saber qué descartar), no antes — así nunca apunta a una
+        // lectura pendiente que ni siquiera se llegó a mostrar.
+        currentSignature = signature
 
         val ratePerKm = if (offer.distanceKm != null && offer.distanceKm > 0) {
             offer.fareMx / offer.distanceKm
