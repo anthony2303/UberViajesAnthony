@@ -23,10 +23,14 @@ import com.anthony.uberviajes.CrashHandler
 import com.anthony.uberviajes.R
 import com.anthony.uberviajes.license.LicenseManager
 import com.anthony.uberviajes.service.ScreenCaptureService
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
+    private var mainScreenBound = false
 
     private val captureRequestLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -68,7 +72,6 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
         bindMainScreen()
-        checkLicense()
 
         // Si venimos de la notificación "Captura de pantalla detenida",
         // disparamos el flujo de reanudar automáticamente — el permiso de
@@ -81,12 +84,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Revisa la licencia CADA VEZ que la pantalla principal vuelve a
+        // primer plano (no solo al abrir la app por primera vez). Antes,
+        // si desactivabas la licencia desde el panel admin mientras la app
+        // ya estaba abierta, no pasaba nada hasta que la volvían a abrir
+        // desde cero — ahora también se detecta al regresar a esta pantalla.
+        if (mainScreenBound) {
+            checkLicense()
+        }
+    }
+
     /**
      * Si no hay ninguna licencia guardada, manda directo a LicenseActivity.
-     * Si hay una guardada pero ya venció (según el último estado conocido),
-     * muestra el diálogo de renovación. También refresca el estado contra
-     * el servidor en segundo plano por si se desactivó/extendió desde el
-     * panel admin.
+     * Si hay una guardada, muestra de inmediato el último estado conocido
+     * (para no dejar la pantalla en blanco mientras se consulta el
+     * servidor) y, en paralelo, hace una verificación EN VIVO contra el
+     * servidor — así una licencia desactivada/vencida desde el panel admin
+     * se detecta de inmediato, no solo en el próximo arranque en frío.
      */
     private fun checkLicense() {
         if (LicenseManager.getSavedKey(this) == null) {
@@ -95,23 +111,50 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        updateLicenseInfoText()
         if (!LicenseManager.isCurrentlyValid(this)) {
-            showLicenseExpiredDialog()
+            showLicenseExpiredDialog(null)
         }
 
         Thread {
             val result = LicenseManager.refreshStatus(this)
-            if (result is LicenseManager.Result.Error && LicenseManager.isCurrentlyValid(this).not()) {
-                runOnUiThread { showLicenseExpiredDialog() }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                updateLicenseInfoText()
+                when (result) {
+                    is LicenseManager.Result.Error -> showLicenseExpiredDialog(result.message)
+                    is LicenseManager.Result.Success -> { /* válida, no hay nada que mostrar */ }
+                }
             }
         }.start()
     }
 
-    private fun showLicenseExpiredDialog() {
+    private fun updateLicenseInfoText() {
+        val view = findViewById<TextView>(R.id.tvLicenseInfo) ?: return
+        val expiresAt = LicenseManager.getExpiresAt(this)
+        if (expiresAt <= 0L) {
+            view.text = ""
+            return
+        }
+        val formato = SimpleDateFormat("dd/MM/yyyy", Locale("es", "MX"))
+        val fechaTexto = formato.format(Date(expiresAt))
+        view.text = if (LicenseManager.isCurrentlyValid(this)) {
+            "Licencia vigente hasta el $fechaTexto"
+        } else {
+            "Licencia vencida (venció el $fechaTexto)"
+        }
+    }
+
+    private fun showLicenseExpiredDialog(reason: String?) {
         if (isFinishing) return
+        val mensaje = if (reason.isNullOrBlank()) {
+            "¿Quieres renovarla?"
+        } else {
+            "$reason\n\n¿Quieres renovarla?"
+        }
         AlertDialog.Builder(this)
             .setTitle("Tu licencia está vencida")
-            .setMessage("¿Quieres renovarla?")
+            .setMessage(mensaje)
             .setPositiveButton("Renovar por WhatsApp") { _, _ -> openWhatsAppRenewal() }
             .setNegativeButton("Después", null)
             .setCancelable(true)
@@ -129,6 +172,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindMainScreen() {
+        mainScreenBound = true
         mediaProjectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
@@ -150,17 +194,45 @@ class MainActivity : AppCompatActivity() {
         }
 
     /**
-     * Paso 0 (antes que overlay/captura): pide que la app quede excluida de
-     * la optimización de batería. Sin esto, en varias marcas (Xiaomi,
-     * Huawei, Honor, Oppo, Samsung) el sistema mata el servicio de captura
-     * después de un rato en segundo plano, aunque sea un foreground service.
+     * Verifica la licencia EN VIVO contra el servidor antes de proceder
+     * (no solo el estado guardado localmente) — así una licencia
+     * desactivada desde el panel admin se detecta en el momento, no hasta
+     * el próximo arranque en frío. Si no hay conexión, sigue con el último
+     * estado conocido en vez de bloquear al usuario sin internet.
      */
     private fun startCaptureFlow() {
         if (!LicenseManager.isCurrentlyValid(this)) {
-            showLicenseExpiredDialog()
+            showLicenseExpiredDialog(null)
             return
         }
 
+        Toast.makeText(this, "Verificando licencia…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val result = LicenseManager.refreshStatus(this)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                updateLicenseInfoText()
+                when (result) {
+                    is LicenseManager.Result.Success -> continueCaptureFlowAfterLicenseCheck()
+                    is LicenseManager.Result.Error -> {
+                        if (LicenseManager.isCurrentlyValid(this)) {
+                            // Sin conexión: seguimos con el último estado
+                            // guardado en vez de bloquear al usuario.
+                            continueCaptureFlowAfterLicenseCheck()
+                        } else {
+                            showLicenseExpiredDialog(result.message)
+                        }
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun continueCaptureFlowAfterLicenseCheck() {
+        // Pide que la app quede excluida de la optimización de batería.
+        // Sin esto, en varias marcas (Xiaomi, Huawei, Honor, Oppo, Samsung)
+        // el sistema mata el servicio de captura después de un rato en
+        // segundo plano, aunque sea un foreground service.
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !powerManager.isIgnoringBatteryOptimizations(packageName)

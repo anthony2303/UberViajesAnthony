@@ -19,6 +19,17 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="48dp" />
 
+    <TextView
+        android:id="@+id/tvLicenseInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/texto_tenue"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="6dp" />
+
     <Button
         android:id="@+id/btnStartCapture"
         android:layout_width="wrap_content"
@@ -26,10 +37,10 @@
         android:text="Iniciar captura de ofertas"
         android:textColor="@color/fondo"
         android:backgroundTint="@color/neon"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintTop_toBottomOf="@id/tvLicenseInfo"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="32dp" />
+        android:layout_marginTop="24dp" />
 
     <Button
         android:id="@+id/btnSettings"
