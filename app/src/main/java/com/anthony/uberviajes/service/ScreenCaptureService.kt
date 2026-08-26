@@ -289,20 +289,59 @@ class ScreenCaptureService : Service() {
      * ajustar este patrón — mándame otra captura de pantalla del texto
      * que no matchee y lo afinamos.
      */
+    /**
+     * Extrae tarifa (MXN), distancia (km) y tiempo (min) del texto
+     * reconocido. Calibrado con ofertas reales de Uber:
+     *
+     *   "$32.96 ... Total: 23 min (9.7 km) ..."
+     *
+     * Validación ESTRICTA en dos capas, para evitar los "números aleatorios"
+     * que salían de vez en cuando (el OCR agarrando dígitos sueltos de
+     * cualquier parte de la pantalla):
+     *
+     *  1) Posición: el "$" tiene que aparecer ANTES del patrón "Total: X min
+     *     (Y km)" en el texto — así como está la tarjeta real (la tarifa
+     *     arriba, el resumen de tiempo/distancia abajo) — y a no más de 80
+     *     caracteres de distancia. Un "$" de otra parte de la pantalla
+     *     (ganancias del día, otro elemento) casi nunca cae justo ahí.
+     *  2) Rango: se descarta cualquier valor fuera de lo que puede ser un
+     *     viaje real (tarifa $5–$600, distancia 0.05–150 km, tiempo 1–180
+     *     min) — un dato fuera de rango es casi seguro un error de OCR.
+     *
+     * Si tu formato varía entre Uber/DiDi/Cabify, puede que necesites
+     * ajustar este patrón — mándame otra captura de pantalla del texto
+     * que no matchee y lo afinamos.
+     */
     private fun parseTripOffer(text: String): TripOffer? {
-        val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:[.,]\\d{1,2})?)").matcher(text)
-        val totalMatch = Pattern.compile(
+        val totalPattern = Pattern.compile(
             "Total:?\\s*(\\d+)\\s*min\\s*\\((\\d+(?:[.,]\\d+)?)\\s*km\\)"
-        ).matcher(text)
+        )
+        val totalMatch = totalPattern.matcher(text)
+        if (!totalMatch.find()) return null
 
-        val fare = if (fareMatch.find()) fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull() else null
+        val min = totalMatch.group(1)?.toIntOrNull() ?: return null
+        val km = totalMatch.group(2)?.replace(",", ".")?.toDoubleOrNull() ?: return null
 
-        if (fare == null || !totalMatch.find()) return null
+        // Solo se busca la tarifa en el tramo de texto ANTES de "Total:",
+        // y no más lejos de 80 caracteres — no en toda la pantalla.
+        val totalStart = totalMatch.start()
+        val ventanaAntes = text.substring(maxOf(0, totalStart - 80), totalStart)
 
-        val min = totalMatch.group(1)?.toIntOrNull()
-        val km = totalMatch.group(2)?.replace(",", ".")?.toDoubleOrNull()
+        val fareMatch = Pattern.compile("\\$\\s?(\\d+(?:[.,]\\d{1,2})?)").matcher(ventanaAntes)
+        // Toma la ÚLTIMA coincidencia dentro de la ventana (la más cercana
+        // a "Total:", que es la más probable de ser la tarifa de esta
+        // tarjeta y no un residuo de texto anterior).
+        var fare: Double? = null
+        while (fareMatch.find()) {
+            fare = fareMatch.group(1)?.replace(",", ".")?.toDoubleOrNull()
+        }
+        if (fare == null) return null
 
-        if (min == null || km == null) return null
+        // Capa 2: rangos razonables para un viaje real.
+        if (fare < 5.0 || fare > 600.0) return null
+        if (km < 0.05 || km > 150.0) return null
+        if (min < 1 || min > 180) return null
+
         return TripOffer(fareMx = fare, distanceKm = km, minutes = min)
     }
 
